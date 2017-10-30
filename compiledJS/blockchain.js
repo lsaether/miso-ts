@@ -1,75 +1,59 @@
-import * as CryptoJS from 'crypto-js';
-
-export class Block {
-    private index: number;
-    private previousHash: string;
-    private timestamp: number;
-    private data: string;
-    private hash: string;
-
-    constructor(index: number, previousHash: any, timestamp: number, data: any, hash: any) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const CryptoJS = require("crypto-js");
+class Block {
+    constructor(index, previousHash, timestamp, data, hash) {
         this.index = index;
         this.previousHash = previousHash.toString();
         this.timestamp = timestamp;
         this.data = data;
         this.hash = hash.toString();
     }
-
-    public getIndex(): number {
+    getIndex() {
         return this.index;
     }
-
-    public getPrevHash(): string {
+    getPrevHash() {
         return this.previousHash;
     }
-
-    public getTimestamp(): number {
+    getTimestamp() {
         return this.timestamp;
     }
-
-    public getData(): string {
+    getData() {
         return this.data;
     }
-
-    public getHash(): string {
+    getHash() {
         return this.hash;
     }
 }
-
-export class BlockChain {
-    private chain: Block[] = [];
-
-    constructor(genesis: Block) {
+exports.Block = Block;
+class BlockChain {
+    constructor(genesis) {
+        this.chain = [];
         this.chain.push(genesis);
     }
-
-    public generateNextBlock(blockData: string): Block {
-        const prevBlock: Block = this.getLatestBlock();
+    generateNextBlock(blockData) {
+        const prevBlock = this.getLatestBlock();
         const nextIndex = prevBlock.getIndex() + 1;
         const prevBlockHash = prevBlock.getHash();
         const nextTimestamp = new Date().getTime() / 1000;
         const nextHash = this.calcBlockHash(nextIndex, prevBlockHash, nextTimestamp, blockData);
         return new Block(nextIndex, prevBlockHash, nextTimestamp, blockData, nextHash);
     }
-
-    public addBlock(block: Block): boolean {
+    addBlock(block) {
         if (this.isValidNextBlock(block)) {
             this.chain.push(block);
             return true;
         }
         return false;
     }
-
-    public getBlocks(): Block[] {
+    getBlocks() {
         return this.chain;
     }
-
-    public getLatestBlock(): Block {
+    getLatestBlock() {
         return this.chain[this.chain.length - 1];
     }
-
-    private isValidNextBlock(block: Block): boolean {
-        const prevBlock: Block = this.getLatestBlock();
+    isValidNextBlock(block) {
+        const prevBlock = this.getLatestBlock();
         if (prevBlock.getIndex() + 1 !== block.getIndex()) {
             throw new Error("Wrong block index!");
         }
@@ -77,20 +61,19 @@ export class BlockChain {
             throw new Error("Wrong previous block hash!");
         }
         if (this.calcHashForBlock(block) !== block.getHash()) {
-            throw new Error("What you trying to pull buddy? Wrong block hash...")
+            throw new Error("What you trying to pull buddy? Wrong block hash...");
         }
         return true;
     }
-
-    private calcHashForBlock(block: Block): string {
+    calcHashForBlock(block) {
         return this.calcBlockHash(block.getIndex(), block.getPrevHash(), block.getTimestamp(), block.getData());
     }
-
-    private calcBlockHash(index: number, previousHash: string, timestamp: number, data: string): string {
+    calcBlockHash(index, previousHash, timestamp, data) {
         return CryptoJS.SHA3(index.toString()
-                                .concat(previousHash)
-                                .concat(timestamp.toString())
-                                .concat(data))
-                                .toString();
+            .concat(previousHash)
+            .concat(timestamp.toString())
+            .concat(data))
+            .toString();
     }
 }
+exports.BlockChain = BlockChain;
