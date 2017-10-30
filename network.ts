@@ -21,7 +21,6 @@ const httpPort = process.env.HTTP_PORT || 6973;
 const p2pPort = process.env.P2P_PORT || 6974;
 const initialPeers = process.env.PEERS ? process.env.PEERS!.split('.') : [];
 
-const sockets: WebSocketHack[] = [];
 const messageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
@@ -30,43 +29,64 @@ const messageType = {
 
 let blockchain: BlockChain =  new BlockChain(genesisBlock());
 
-export const initHttpServer = () => {
-    const app = express();
-    app.use(bodyParser.json());
-
-    app.get('/blocks', (req, res) => {
-        res.send(JSON.stringify(blockchain.getBlocks()));
-    });
-
-    app.post('/mineBlock', (req, res) => {
-        const nextBlock: Block = blockchain.generateNextBlock(req.body.data);
-        blockchain.addBlock(nextBlock);
-        broadcast(responseLatestMsg());
-        console.log(`block added ${ JSON.stringify(nextBlock) }`);
-        res.send();
-    });
-
-    app.get('/peers', (req, res) => {
-        res.send(sockets.map(s => s._socket.remoteAddress + ':' + s._socket.remotePort));
-    });
-
-    app.post('/addPeer', (req, res) => {
-        connectToPeers([req.body.peer]);
-        res.send();
-    })
-
-    app.listen(httpPort, () => console.log(`Listening on port: ${httpPort}`));
-}
-
-export class P2PServer {
+export class Server {
+    private _httpPort: number;
     private _p2pPort: number;
+    private _peers: string[] = [];
+
     private _sockets: WebSocketHack[];
 
-    constructor(p2pPort: number) {
+    constructor(httpPort: number, p2pPort: number, initialPeers: string[]) {
+        this._httpPort = httpPort;
         this._p2pPort = p2pPort;
+        this._peers = initialPeers;
     }
 
     init() {
+        this.connectToPeers(this._peers);
+        this.initHttp();
+        this.initP2P();
+    }
+
+    connectToPeers(peers: string[]) {
+        peers.forEach((peer) => {
+            const ws = new WebSocket(peer);
+            ws.on('open', () => this.makeConnection(ws));
+            ws.on('error', () => {
+                console.log('connection failed =(');
+            });
+        });
+    }
+
+    initHttp() {
+        const app = express();
+        app.use(bodyParser.json());
+    
+        app.get('/blocks', (req, res) => {
+            res.send(JSON.stringify(blockchain.getBlocks()));
+        });
+    
+        app.post('/mineBlock', (req, res) => {
+            const nextBlock: Block = blockchain.generateNextBlock(req.body.data);
+            blockchain.addBlock(nextBlock);
+            this.broadcast(this.responseLatestMsg());
+            console.log(`block added ${ JSON.stringify(nextBlock) }`);
+            res.send();
+        });
+    
+        app.get('/peers', (req, res) => {
+            res.send(this._sockets.map(s => s._socket.remoteAddress + ':' + s._socket.remotePort));
+        });
+    
+        app.post('/addPeer', (req, res) => {
+            this.connectToPeers([req.body.peer]);
+            res.send();
+        })
+    
+        app.listen(httpPort, () => console.log(`Listening on port: ${httpPort}`));
+    }
+
+    initP2P() {
         const server = new WebSocket.Server({port: this._p2pPort});
         server.on('connection', (ws: WebSocket) => this.makeConnection(ws));
         console.log(`listening websocket p2p port on: ${this._p2pPort}`);
@@ -76,7 +96,7 @@ export class P2PServer {
         this._sockets.push(ws as WebSocketHack);
         this.initMsgHandler(ws);
         this.initErrorHandler(ws);
-        this.write(ws, queryChainLengthMsg());
+        this.write(ws, this.queryChainLengthMsg());
     }
 
     private initMsgHandler(ws: WebSocket) {
@@ -146,7 +166,7 @@ export class P2PServer {
                 this.broadcast(this.queryAllMsg());
             } else {
                 console.log('Found newest longest chain! Replacing chain...');
-                replaceChain(receivedBlocks);
+                this.replaceChain(receivedBlocks);
             }
         } else {
             console.log('received blockchain that is not longer than ours.');
@@ -164,29 +184,17 @@ export class P2PServer {
             'type': messageType.QUERY_LATEST
         }
     }
+
+    /// Not sure this is the best place to put this...
+    private replaceChain(newChain: Block[]) {
+        // if (isValidChain(newChain));
+        // if (newChain.length > blockchain.getBlocks().length) {
+        //     console.log('Received blockchain is valid. Replacing the current chain with new one.');
+        //     blockchain = newChain;
+        // }
+        throw new Error('NOT IMPLEMENTED');
+    }
 }
 
-var replaceChain = (newBlocks) => {
-    if (isValidChain(newBlocks) && newBlocks.length > blockchain.length) {
-        console.log('Received blockchain is valid. Replacing current blockchain with received blockchain');
-        blockchain = newBlocks;
-        broadcast(responseLatestMsg());
-    } else {
-        console.log('Received blockchain invalid');
-    }
-};
-
-var connectToPeers = (newPeers: string[]) => {
-    newPeers.forEach((peer) => {
-        var ws = new WebSocket(peer);
-        ws.on('open', () => initConnection(ws));
-        ws.on('error', () => {
-            console.log('connection failed')
-        });
-    });
-};
-
-connectToPeers(initialPeers);
-initHttpServer();
-
-initP2PServer();
+const serve = new Server(httpPort as number, p2pPort as number, initialPeers);
+serve.init();

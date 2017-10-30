@@ -37,7 +37,7 @@ export class Block {
 }
 
 export class BlockChain {
-    private chain: Block[];
+    private chain: Block[] = [];
 
     constructor(genesis: Block) {
         this.chain.push(genesis);
