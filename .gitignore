@@ -3,3 +3,5 @@ node_modules
 scratch
 scratch/*
 compileAll.ts
+compiledJS/*
+compiledJS
